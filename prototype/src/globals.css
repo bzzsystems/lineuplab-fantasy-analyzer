@@ -1,0 +1,218 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary Brand Colors - Football themed professional palette */
+    --primary: 142 76% 36%;         /* Forest Green #16A34A */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 221 83% 53%;       /* Professional Blue #3B82F6 */
+    --secondary-foreground: 0 0% 98%;
+    --accent: 45 93% 47%;           /* Gold Accent #F59E0B */
+    --accent-foreground: 0 0% 9%;
+    
+    /* Neutral System */
+    --background: 0 0% 99%;         /* Pure white with slight warmth */
+    --foreground: 222 84% 5%;       /* Near black */
+    --muted: 210 40% 98%;           /* Very light gray */
+    --muted-foreground: 215 16% 47%;
+    
+    /* Cards and Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 222 84% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 5%;
+    
+    /* Interactive Elements */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 142 76% 36%;
+    
+    /* Status Colors */
+    --success: 142 76% 36%;         /* Green */
+    --success-foreground: 0 0% 98%;
+    --warning: 45 93% 47%;          /* Amber */
+    --warning-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;       /* Red */
+    --destructive-foreground: 0 0% 98%;
+    
+    /* Performance Colors */
+    --excellent: 142 76% 36%;       /* Green */
+    --good: 45 93% 47%;             /* Amber */
+    --poor: 0 84% 60%;              /* Red */
+    
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 221 83% 53%;
+    --secondary-foreground: 0 0% 98%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 0 0% 9%;
+    
+    --background: 222 84% 4%;
+    --foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    
+    --card: 222 84% 4%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 84% 4%;
+    --popover-foreground: 210 40% 98%;
+    
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 142 76% 36%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply scroll-smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  
+  /* Typography System */
+  h1 { @apply text-4xl font-bold tracking-tight lg:text-5xl; }
+  h2 { @apply text-3xl font-semibold tracking-tight; }
+  h3 { @apply text-2xl font-semibold tracking-tight; }
+  h4 { @apply text-xl font-semibold tracking-tight; }
+  h5 { @apply text-lg font-medium; }
+  h6 { @apply text-base font-medium; }
+  
+  .text-mono { font-family: 'JetBrains Mono', monospace; }
+}
+
+@layer components {
+  /* Glassmorphism effects */
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .glass-dark {
+    @apply bg-black/10 backdrop-blur-md border border-black/20;
+  }
+  
+  /* Neumorphism effects */
+  .neu-inset {
+    box-shadow: inset 2px 2px 5px rgba(0,0,0,0.1), inset -2px -2px 5px rgba(255,255,255,0.8);
+  }
+  
+  .neu-raised {
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.1), -4px -4px 10px rgba(255,255,255,0.8);
+  }
+  
+  /* Gradient backgrounds */
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+  }
+  
+  .gradient-success {
+    background: linear-gradient(135deg, hsl(var(--success)) 0%, hsl(var(--primary)) 100%);
+  }
+  
+  .gradient-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+  }
+  
+  /* Performance indicators */
+  .perf-excellent { @apply text-green-600 bg-green-50 border-green-200; }
+  .perf-good { @apply text-amber-600 bg-amber-50 border-amber-200; }
+  .perf-average { @apply text-blue-600 bg-blue-50 border-blue-200; }
+  .perf-poor { @apply text-red-600 bg-red-50 border-red-200; }
+  
+  /* Interactive elements */
+  .interactive {
+    @apply transition-all duration-200 ease-in-out hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2;
+  }
+}
+
+@layer utilities {
+  /* Custom animations */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 5px rgba(22, 163, 74, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(22, 163, 74, 0.8);
+    }
+  }
+  
+  .animate-fade-in-up {
+    animation: fade-in-up 0.5s ease-out;
+  }
+  
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+  
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  /* Hide scrollbars but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar { 
+    display: none;  /* Safari and Chrome */
+  }
+  
+  /* Enhanced mobile touch scrolling */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+  }
+  
+  .mobile-scroll > * {
+    scroll-snap-align: start;
+  }
+}

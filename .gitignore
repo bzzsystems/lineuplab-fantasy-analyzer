@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE and system files
+.DS_Store
+.vscode/
+.kiro/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Archive and test files (keep these local only)
+archive/
+test-espn-*.sh
+test-espn-*.py
+*-test.js
+enhanced-analysis-real-data.js
+full-season-analysis.js
+live-enhanced-analysis.js
