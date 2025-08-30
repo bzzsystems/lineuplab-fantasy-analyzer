@@ -59,9 +59,12 @@ def set_cached_analysis(cache_key: str, data: Dict) -> None:
     logger.info(f"Cache SET for {cache_key}")
 
 app = FastAPI(title="Secure ESPN Fantasy Football Server")
+# Get allowed origins from environment or use defaults
+ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173').split(',')
+
 app.add_middleware(
     CORSMiddleware, 
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "https://yourdomain.com"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True, 
     allow_methods=["GET", "POST", "OPTIONS"], 
     allow_headers=["*"]

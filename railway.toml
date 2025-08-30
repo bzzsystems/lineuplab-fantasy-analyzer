@@ -1,0 +1,19 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+
+[[services]]
+name = "backend"
+source = "espn-service"
+buildCommand = "pip install -r requirements.txt"
+startCommand = "python secure-espn-server.py"
+
+[[services]]
+name = "frontend"
+source = "prototype"
+buildCommand = "npm ci && npm run build"
+startCommand = "npm run preview"
