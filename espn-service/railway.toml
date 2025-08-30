@@ -1,6 +1,0 @@
-[build]
-builder = "nixpacks"
-
-[deploy]
-startCommand = "python secure-espn-server.py"
-restartPolicyType = "on_failure"
