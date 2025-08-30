@@ -117,7 +117,7 @@ class SecurityManager:
         """Create JWT session token"""
         payload = {
             'league_id': league_id,
-            'user_id': hashlib.sha256(user_identifier.encode()).hexdigest()[:16],
+            'user_id': user_identifier,  # Use user_identifier directly (already hashed)
             'issued_at': time.time(),
             'expires_at': time.time() + SESSION_TIMEOUT
         }
@@ -220,17 +220,23 @@ def make_espn_request(session_token: str, league_id: str, year: int, view: str =
     
     if expected_session_id not in server_state.encrypted_sessions:
         logger.error(f"Session not found: {expected_session_id}")
-        # Fallback: try to find any session for this league
-        session_found = None
-        for stored_session_id, session_info in server_state.encrypted_sessions.items():
-            if session_info.get('league_id') == session_data['league_id']:
-                session_found = stored_session_id
-                logger.info(f"Found fallback session: {session_found}")
-                break
         
-        if not session_found:
-            raise HTTPException(status_code=401, detail="Session not found - please re-authenticate")
-        expected_session_id = session_found
+        # Clean up expired sessions first
+        server_state.cleanup_expired_sessions()
+        
+        # Try again after cleanup
+        if expected_session_id not in server_state.encrypted_sessions:
+            # Fallback: try to find any session for this league
+            session_found = None
+            for stored_session_id, session_info in server_state.encrypted_sessions.items():
+                if session_info.get('league_id') == session_data['league_id']:
+                    session_found = stored_session_id
+                    logger.info(f"Found fallback session: {session_found}")
+                    break
+            
+            if not session_found:
+                raise HTTPException(status_code=401, detail="Session not found - please re-authenticate")
+            expected_session_id = session_found
     
     # Get session data
     session_info = server_state.encrypted_sessions[expected_session_id]
@@ -1100,6 +1106,64 @@ async def secure_get_all_teams_analysis(
         raise HTTPException(status_code=500, detail=f"All teams analysis failed: {str(e)}")
 
 # FAST LOADING ENDPOINTS - Added to fix 3-5 minute load times
+
+@app.post("/secure-team-instant")  
+async def secure_get_team_instant(
+    request: dict,
+    session_token: str = Depends(get_current_session)
+):
+    """Get INSTANT basic team info - just current week for immediate display (< 1 second)"""
+    server_state.request_count += 1
+    
+    try:
+        league_id = request.get('league_id')
+        team_id = request.get('team_id')  
+        year = request.get('year', 2024)
+        
+        league_id, year = validate_inputs(league_id, year)
+        
+        if not team_id:
+            raise HTTPException(status_code=400, detail="Team ID required")
+            
+        # Verify user owns this team
+        session_data = SecurityManager.validate_session_token(session_token)
+        session_id = f"{session_data['user_id']}_{session_data['league_id']}"
+        
+        # Get just current week data - minimal processing
+        espn_session = get_espn_session(session_id)
+        
+        try:
+            league = get_league_safe(espn_session, league_id, year)
+            current_week = get_current_week(league)
+            
+            # Just return basic info for instant display
+            team = None
+            for t in league.teams:
+                if t.team_id == int(team_id):
+                    team = t
+                    break
+                    
+            if not team:
+                raise HTTPException(status_code=404, detail="Team not found")
+            
+            # Minimal data - just what's needed to show something immediately
+            return {
+                "teamId": team_id,
+                "currentWeek": current_week,
+                "teamName": team.team_name if hasattr(team, 'team_name') else f"Team {team_id}",
+                "isActive": True,
+                "loadingState": "instant_loaded"
+            }
+            
+        except Exception as espn_error:
+            logger.error(f"ESPN API error in instant load: {espn_error}")
+            raise HTTPException(status_code=500, detail=f"ESPN API error: {str(espn_error)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in instant load: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/secure-team-quick-summary")
 async def secure_get_team_quick_summary(

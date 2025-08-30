@@ -114,6 +114,12 @@ export function useTeamData(year: number = 2024) {
 
   const fetchSeasonData = async (force = false) => {
     if (!teamData.teamId) return
+    
+    // Prevent multiple simultaneous calls
+    if (teamData.isLoading && !force) {
+      console.log('⚠️ Season data fetch already in progress, skipping')
+      return
+    }
 
     // Check cache first
     if (!force) {
@@ -130,6 +136,13 @@ export function useTeamData(year: number = 2024) {
     setTeamData(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
+      // Skip instant loading for now - has a bug
+      // console.log('🚀 Fetching instant team info...')
+      // const instantInfo = await apiService.getInstantTeamInfo(teamData.teamId, year)
+      // if (instantInfo) {
+      //   console.log('✨ Got instant info, showing skeleton with basic details')
+      // }
+      
       console.log('🚀 Fast loading season data for', teamData.teamId, 'year', year)
       
       // Use progressive loading with progress updates
@@ -146,7 +159,11 @@ export function useTeamData(year: number = 2024) {
             loadingProgress: progress
           }))
         }
-      )
+      ).catch((error) => {
+        console.error('❌ Progressive loading failed:', error)
+        // Return null to trigger fallback
+        return null
+      })
       
       if (result) {
         // Cache the result
@@ -161,9 +178,32 @@ export function useTeamData(year: number = 2024) {
         console.log('✅ Fast season data loaded successfully')
         return result
       } else {
+        console.log('⚠️ Progressive loading failed, trying fallback to regular season summary')
+        
+        // Fallback: Try regular getSeasonSummary method
+        try {
+          const fallbackResult = await apiService.getSeasonSummary(teamData.teamId, year)
+          
+          if (fallbackResult) {
+            // Cache the fallback result
+            dataCache.set('seasonData', fallbackResult, teamData.teamId)
+            
+            setTeamData(prev => ({
+              ...prev,
+              seasonData: fallbackResult,
+              isLoading: false,
+              loadingProgress: undefined
+            }))
+            console.log('✅ Fallback season data loaded successfully')
+            return fallbackResult
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError)
+        }
+        
         setTeamData(prev => ({ 
           ...prev, 
-          error: 'No season data available', 
+          error: 'Unable to load season data. Please try refreshing or re-authenticating.', 
           isLoading: false,
           loadingProgress: undefined
         }))
@@ -193,7 +233,7 @@ export function useTeamData(year: number = 2024) {
 
   // Check cache immediately when team ID is set (no API calls)
   useEffect(() => {
-    if (teamData.teamId && !teamData.seasonData) {
+    if (teamData.teamId && !teamData.seasonData && !teamData.isLoading) {
       const cachedData = dataCache.get('seasonData', teamData.teamId)
       if (cachedData) {
         setTeamData(prev => ({
@@ -202,7 +242,7 @@ export function useTeamData(year: number = 2024) {
         }))
       }
     }
-  }, [teamData.teamId])
+  }, [teamData.teamId, teamData.seasonData, teamData.isLoading])
 
   return {
     ...teamData,

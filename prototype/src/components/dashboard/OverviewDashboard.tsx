@@ -70,9 +70,10 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
   const fetchLeagueData = React.useCallback(async (force = false) => {
     if (!hasSession || !teamId) return null
 
-    // Check cache first
+    // Check cache first (cache by year)
+    const cacheKey = `leagueData-${selectedYear}`
     if (!force) {
-      const cachedData = dataCache.get('leagueData')
+      const cachedData = dataCache.get(cacheKey)
       if (cachedData) {
         setLeagueData(cachedData)
         return cachedData
@@ -84,7 +85,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
       console.log('🏆 Fetching league data for year:', selectedYear)
       const data = await apiService.getLeagueAnalysis(selectedYear)
       if (data) {
-        dataCache.set('leagueData', data)
+        dataCache.set(cacheKey, data)
         setLeagueData(data)
       }
       return data
@@ -94,7 +95,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
     } finally {
       setIsLoadingLeague(false)
     }
-  }, [hasSession, teamId])
+  }, [hasSession, teamId, selectedYear])
 
   // Load season data only when viewing personal dashboard
   const ensureSeasonData = React.useCallback(async () => {
@@ -109,6 +110,11 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
   const handleWeekChange = async (newWeek: number) => {
     if (!teamId) return
     
+    // Don't reload if it's the same week
+    if (newWeek === selectedWeek && selectedWeekData) {
+      return
+    }
+    
     setIsLoadingWeekData(true)
     setSelectedWeek(newWeek)
     
@@ -117,6 +123,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
       setSelectedWeekData(weeklyData)
     } catch (error) {
       console.error('Failed to fetch week data:', error)
+      setSelectedWeekData(null)
     } finally {
       setIsLoadingWeekData(false)
     }
@@ -139,7 +146,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
   const renderContent = () => {
     switch (activeView) {
       case 'league':
-        return <LeagueLeaderboard isLoading={isLoadingLeague} leagueData={leagueData} />
+        return <LeagueLeaderboard isLoading={isLoadingLeague} leagueData={leagueData} selectedYear={selectedYear} />
       case 'compare': 
         return <TeamComparison />
       case 'login':
@@ -149,34 +156,125 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
     }
   }
 
-  const renderPersonalDashboard = () => {
-    // Show loading state
-    if (isLoading) {
-      return (
-        <div className="flex items-center justify-center min-h-[400px]">
+  // Skeleton loading component for instant page display
+  const SkeletonDashboard = () => (
+    <div className="space-y-6 animate-fade-in-up">
+      {/* Hero Banner */}
+      <Card className="gradient-card border-white/30">
+        <CardContent className="p-6">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-            <p className="text-slate-600">Loading your fantasy analysis...</p>
-            {loadingProgress ? (
-              <div className="mt-3">
-                <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto mb-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(loadingProgress.loaded / loadingProgress.total) * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-slate-500 text-sm">
-                  Loaded {loadingProgress.loaded} of {loadingProgress.total} weeks
-                  {loadingProgress.weeks.length > 0 && (
-                    <span className="block mt-1 text-xs">
-                      Latest: {loadingProgress.weeks.slice(-3).join(', ')}
-                    </span>
-                  )}
-                </p>
+            <div className="animate-pulse">
+              <div className="h-8 bg-white/20 rounded w-64 mx-auto mb-2"></div>
+              <div className="h-4 bg-white/20 rounded w-48 mx-auto mb-4"></div>
+              <div className="inline-block bg-green-100 px-3 py-1 rounded-full">
+                <span className="text-sm text-green-700">✨ Loading your season...</span>
               </div>
-            ) : (
-              <p className="text-slate-400 text-sm mt-2">Fast loading optimized - should complete in 15-30 seconds</p>
-            )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Weekly Performance Skeleton */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Calendar className="w-5 h-5" />
+            <span>Weekly Performance</span>
+            <div className="ml-auto text-sm bg-blue-100 px-2 py-1 rounded-full">
+              Loading data...
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto pb-4">
+            <div className="flex space-x-3 min-w-max px-1 py-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((week) => (
+                <div key={week} className="w-32 flex-shrink-0 bg-gray-100 rounded-xl border-2 border-gray-200 p-3 animate-pulse">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-slate-600">Week {week}</div>
+                    <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                  </div>
+                  <div className="h-6 bg-gray-200 rounded mb-1"></div>
+                  <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Stats Preview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50">
+          <CardContent className="p-4 text-center">
+            <Trophy className="w-8 h-8 mx-auto mb-2 text-green-500" />
+            <div className="animate-pulse">
+              <div className="h-6 bg-green-200 rounded w-8 mx-auto mb-1"></div>
+              <div className="text-xs text-green-600">Elite Weeks</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-50">
+          <CardContent className="p-4 text-center">
+            <TrendingUp className="w-8 h-8 mx-auto mb-2 text-blue-500" />
+            <div className="animate-pulse">
+              <div className="h-6 bg-blue-200 rounded w-8 mx-auto mb-1"></div>
+              <div className="text-xs text-blue-600">Strong Weeks</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-yellow-200/50 bg-gradient-to-br from-yellow-50 to-yellow-50">
+          <CardContent className="p-4 text-center">
+            <BarChart3 className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
+            <div className="animate-pulse">
+              <div className="h-6 bg-yellow-200 rounded w-8 mx-auto mb-1"></div>
+              <div className="text-xs text-yellow-600">Avg Weeks</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-red-200/50 bg-gradient-to-br from-red-50 to-red-50">
+          <CardContent className="p-4 text-center">
+            <ArrowDown className="w-8 h-8 mx-auto mb-2 text-red-500" />
+            <div className="animate-pulse">
+              <div className="h-6 bg-red-200 rounded w-8 mx-auto mb-1"></div>
+              <div className="text-xs text-red-600">Poor Weeks</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
+  const renderPersonalDashboard = () => {
+    // Show skeleton while loading (instant page display)
+    if (isLoading && !seasonData) {
+      return (
+        <div>
+          <SkeletonDashboard />
+          {/* Progress indicator overlay */}
+          <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg border p-4 max-w-sm">
+            <div className="flex items-center space-x-3">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-800">Loading your data...</p>
+                {loadingProgress ? (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div 
+                        className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${(loadingProgress.loaded / loadingProgress.total) * 100}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Week {loadingProgress.loaded}/{loadingProgress.total}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-1">Expected: 5-10 seconds</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )
@@ -184,16 +282,18 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
 
     // Show error state - if authentication error, redirect to login
     if (error) {
-      if (error.includes('authenticate') || error.includes('token') || error.includes('401')) {
+      if (error.includes('authenticate') || error.includes('token') || error.includes('401') || error.includes('Session expired')) {
         // Clear invalid session and redirect to login
         localStorage.removeItem('fantasy-session-token')
+        localStorage.removeItem('selected-team-id')
+        localStorage.removeItem('league-id')
         return <LeagueLoginFlow onSetupComplete={() => window.location.reload()} />
       }
       return (
         <EmptyState
           icon={AlertCircle}
           title="Unable to Load Your Data"
-          description={`We encountered an issue loading your fantasy data: ${error}. Please try refreshing the page or reconnecting your league.`}
+          description={`We encountered an issue loading your fantasy data: ${error}. This could be due to network connectivity, ESPN API issues, or session expiration. Please try refreshing the page or reconnecting your league.`}
           action={{
             label: "Refresh Page",
             onClick: () => window.location.reload(),
@@ -601,7 +701,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
 
       {/* Week Detail Modal */}
       <WeekDetailModal
-        key={`week-${selectedWeek}-${selectedWeekData?.week}`}
+        key="week-detail-modal"
         open={selectedWeek !== null}
         onOpenChange={(open) => {
           if (!open) {

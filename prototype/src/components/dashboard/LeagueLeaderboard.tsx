@@ -20,9 +20,10 @@ import {
 interface LeagueLeaderboardProps {
   isLoading?: boolean
   leagueData?: any
+  selectedYear?: number
 }
 
-export function LeagueLeaderboard({ isLoading: externalLoading, leagueData: externalLeagueData }: LeagueLeaderboardProps) {
+export function LeagueLeaderboard({ isLoading: externalLoading, leagueData: externalLeagueData, selectedYear = 2024 }: LeagueLeaderboardProps) {
   const [leagueData, setLeagueData] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
   
@@ -48,13 +49,13 @@ export function LeagueLeaderboard({ isLoading: externalLoading, leagueData: exte
 
   // Only load data if not provided by parent (for backward compatibility)
   React.useEffect(() => {
-    if (!externalLeagueData && !leagueData) {
+    if (!externalLeagueData) {
       const loadLeagueData = async () => {
         try {
           setLoading(true)
           setLoadingProgress({ message: 'Connecting to ESPN...', progress: 10 })
           
-          const data = await apiService.getLeagueAnalysis()
+          const data = await apiService.getLeagueAnalysis(selectedYear)
           
           if (data) {
             setLeagueData(data)
@@ -72,7 +73,7 @@ export function LeagueLeaderboard({ isLoading: externalLoading, leagueData: exte
 
       loadLeagueData()
     }
-  }, [externalLeagueData, leagueData])
+  }, [externalLeagueData, selectedYear])
 
   if (loading) {
     return (
@@ -550,39 +551,6 @@ export function LeagueLeaderboard({ isLoading: externalLoading, leagueData: exte
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card className="border-blue-200/50 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Users className="w-5 h-5 text-blue-600" />
-              <span>League Decision Making Rankings</span>
-            </div>
-            <div className="text-sm text-slate-600 font-normal">
-              {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Season
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-white/60 rounded-lg">
-              <div className="text-2xl font-bold text-blue-700">{bestProcessScore.toFixed(1)}</div>
-              <div className="text-sm text-slate-600">Best Process Score</div>
-              <div className="text-xs text-blue-600 mt-1">{bestProcessTeam?.ownerName}</div>
-            </div>
-            <div className="text-center p-3 bg-white/60 rounded-lg">
-              <div className="text-2xl font-bold text-green-700">{bestProcessTeam?.seasonSummary.eliteGames}</div>
-              <div className="text-sm text-slate-600">Most Elite Games</div>
-              <div className="text-xs text-green-600 mt-1">{bestProcessTeam?.ownerName}</div>
-            </div>
-            <div className="text-center p-3 bg-white/60 rounded-lg">
-              <div className="text-2xl font-bold text-purple-700">{mostPoints.toFixed(0)}</div>
-              <div className="text-sm text-slate-600">Most Points/Game</div>
-              <div className="text-xs text-purple-600 mt-1">{mostPointsTeam?.ownerName}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Season Overview Chart */}
       <SeasonOverviewChart />

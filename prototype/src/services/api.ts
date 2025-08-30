@@ -159,7 +159,13 @@ class ESPNApiService {
           success: false,
           message: response.status === 401 
             ? 'Session expired. Please re-authenticate.' 
-            : errorData.detail || 'Server error'
+            : response.status === 403
+            ? 'Access forbidden. Please check your credentials.'
+            : response.status === 404
+            ? 'Team or league not found. Please verify your league settings.'
+            : response.status === 500
+            ? 'Server error. Please try again in a few minutes.'
+            : errorData.detail || `HTTP ${response.status}: ${response.statusText}`
         };
       }
 
@@ -769,13 +775,52 @@ class ESPNApiService {
 
   // FAST LOADING METHODS - Added to fix 3-5 minute load times
 
-  async getQuickTeamSummary(teamId: string, year: number = 2024): Promise<any> {
+  async getInstantTeamInfo(teamId: string, year: number = 2024): Promise<any> {
     if (!this.sessionToken) {
       this.sessionToken = localStorage.getItem('fantasy-session-token');
     }
 
     if (!this.sessionToken) {
       return null;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/secure-team-instant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.sessionToken}`
+        },
+        body: JSON.stringify({
+          league_id: localStorage.getItem('league-id') || '329849',
+          team_id: teamId,
+          year: year
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Instant team info failed:', errorData);
+        return null;
+      }
+
+      const data = await response.json();
+      console.log('✨ Instant team info loaded:', data);
+      return data;
+    } catch (error) {
+      console.error('Network error in instant team info:', error);
+      return null;
+    }
+  }
+
+  async getQuickTeamSummary(teamId: string, year: number = 2024): Promise<any> {
+    if (!this.sessionToken) {
+      this.sessionToken = localStorage.getItem('fantasy-session-token');
+    }
+
+    if (!this.sessionToken) {
+      console.error('❌ No session token available for quick team summary')
+      throw new Error('No valid session. Please log in again.');
     }
 
     try {
@@ -815,7 +860,8 @@ class ESPNApiService {
     }
 
     if (!this.sessionToken) {
-      return null;
+      console.error('❌ No session token available for week range request')
+      throw new Error('No valid session. Please log in again.');
     }
 
     try {
@@ -853,10 +899,12 @@ class ESPNApiService {
 
   async getProgressiveSeasonSummary(teamId: string, year: number = 2024, progressCallback?: (progress: { loaded: number, total: number, weeks: number[] }) => void): Promise<any> {
     // First, get the quick summary (last 3 weeks)
+    console.log('📊 Starting progressive loading with quick summary')
     const quickData = await this.getQuickTeamSummary(teamId, year);
     
     if (!quickData) {
-      return null;
+      console.error('❌ Quick summary failed, cannot start progressive loading')
+      throw new Error('Unable to load initial team data. Please check your connection and re-authenticate if needed.');
     }
 
     // Process the quick data into season format
@@ -872,8 +920,14 @@ class ESPNApiService {
     const allWeeks = Array.from({length: 17}, (_, i) => i + 1);
     const remainingWeeks = allWeeks.filter(w => !processedWeeks.includes(w));
     
+    if (remainingWeeks.length > 0) {
+      console.log(`📊 Loading remaining ${remainingWeeks.length} weeks in chunks`)
+    }
+    
     // Load in chunks of 5 weeks
     const chunkSize = 5;
+    let failedChunks = 0;
+    
     for (let i = 0; i < remainingWeeks.length; i += chunkSize) {
       const chunk = remainingWeeks.slice(i, i + chunkSize);
       if (chunk.length === 0) continue;
@@ -882,6 +936,7 @@ class ESPNApiService {
       const endWeek = Math.max(...chunk);
       
       try {
+        console.log(`📊 Loading weeks ${startWeek}-${endWeek}...`)
         const chunkData = await this.getTeamWeekRange(teamId, startWeek, endWeek, year);
         
         if (chunkData && chunkData.weekly_data) {
@@ -889,25 +944,57 @@ class ESPNApiService {
           combinedWeeklyData = { ...combinedWeeklyData, ...chunkData.weekly_data };
           processedWeeks = Object.keys(combinedWeeklyData).map(w => parseInt(w)).sort((a, b) => a - b);
           
+          console.log(`✅ Successfully loaded weeks ${startWeek}-${endWeek}`)
+          
           // Notify progress
           if (progressCallback) {
             progressCallback({ loaded: processedWeeks.length, total: 17, weeks: processedWeeks });
           }
+        } else {
+          console.warn(`⚠️ No data returned for weeks ${startWeek}-${endWeek}`)
+          failedChunks++;
         }
       } catch (error) {
-        console.error(`Failed to load weeks ${startWeek}-${endWeek}:`, error);
-        // Continue loading other chunks
+        console.error(`❌ Failed to load weeks ${startWeek}-${endWeek}:`, error);
+        failedChunks++;
+        
+        // If this is an auth error, stop trying other chunks
+        if (error.message && (error.message.includes('session') || error.message.includes('401'))) {
+          console.error('❌ Authentication error detected, stopping progressive loading')
+          throw error;
+        }
+        
+        // Continue loading other chunks, but log the failure
+        if (progressCallback) {
+          progressCallback({ loaded: processedWeeks.length, total: 17, weeks: [...processedWeeks, `Error: ${startWeek}-${endWeek}`] });
+        }
       }
+    }
+    
+    // If too many chunks failed, throw an error
+    if (failedChunks > Math.ceil(remainingWeeks.length / chunkSize / 2)) {
+      console.error(`❌ Too many chunks failed (${failedChunks}), progressive loading considered failed`)
+      throw new Error(`Failed to load most of the season data. Loaded ${processedWeeks.length}/17 weeks.`);
     }
 
     // Process the combined data into season summary format
-    return this.processSeasonDataFromWeekly(combinedWeeklyData, teamId, year);
+    console.log(`📊 Processing ${Object.keys(combinedWeeklyData).length} weeks of data into season summary`)
+    const result = this.processSeasonDataFromWeekly(combinedWeeklyData, teamId, year);
+    console.log('✅ Season summary processed successfully:', result ? 'Valid data' : 'No data returned')
+    return result;
   }
 
   private processSeasonDataFromWeekly(weeklyData: any, teamId: string, year: number): any {
     const weeks = Object.keys(weeklyData)
       .filter(w => parseInt(w) <= 17)
       .sort((a, b) => parseInt(a) - parseInt(b));
+    
+    console.log('📊 Processing weeks:', weeks, 'for team:', teamId)
+    
+    if (weeks.length === 0) {
+      console.error('❌ No weeks found in weekly data')
+      return null;
+    }
 
     // Process each week to get analytics (same logic as before)
     const weeklyAnalytics = [];

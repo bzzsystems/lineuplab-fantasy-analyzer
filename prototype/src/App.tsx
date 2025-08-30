@@ -172,7 +172,7 @@ function App() {
 
   const getPageSubtitle = () => {
     const subtitles = {
-      overview: '2024 Season Performance Summary',
+      overview: 'Season Performance Summary',
       weekly: 'Detailed Week-by-Week Analysis',
       players: 'Player Performance & Efficiency Matrix',
       decisions: 'Start/Sit Decision Analysis',
