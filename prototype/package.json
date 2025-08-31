@@ -1,6 +1,6 @@
 {
   "name": "ff-analyzer-prototype",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "dependencies": {
     "serve": "^14.2.1",
