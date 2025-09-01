@@ -616,8 +616,12 @@ export function WeekDetailModal({ open, onOpenChange, week, weekData: providedWe
                   <div className="text-xs text-slate-600">Total Projected</div>
                 </div>
                 <div className="p-3 bg-white/60 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">+{weekData.projectionDiff}</div>
-                  <div className="text-xs text-slate-600">Beat Projections By</div>
+                  <div className={`text-2xl font-bold ${weekData.projectionDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {weekData.projectionDiff >= 0 ? '+' : ''}{weekData.projectionDiff}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    {weekData.projectionDiff >= 0 ? 'Beat Projections By' : 'Missed Projections By'}
+                  </div>
                 </div>
                 <div className="p-3 bg-white/60 rounded-lg">
                   <div className="text-2xl font-bold text-blue-700">{weekData.processScore}/10</div>

@@ -133,18 +133,26 @@ export function ProcessScoreExplanation({ className }: { className?: string }) {
             choices with the information available.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-            <div className="text-center p-2 bg-white/60 rounded-lg">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+            <div className="text-center p-3 bg-white/80 rounded-lg border-2 border-green-200">
+              <div className="w-4 h-4 rounded border-2 border-green-500 bg-white mx-auto mb-1"></div>
               <div className="font-bold text-green-700">8.0+</div>
-              <div className="text-xs text-green-600">Elite Decisions</div>
+              <div className="text-xs text-green-600">Elite</div>
             </div>
-            <div className="text-center p-2 bg-white/60 rounded-lg">
-              <div className="font-bold text-blue-700">6.0-7.9</div>
-              <div className="text-xs text-blue-600">Good Decisions</div>
+            <div className="text-center p-3 bg-white/80 rounded-lg border-2 border-blue-200">
+              <div className="w-4 h-4 rounded border-2 border-blue-500 bg-white mx-auto mb-1"></div>
+              <div className="font-bold text-blue-700">6.5+</div>
+              <div className="text-xs text-blue-600">Strong</div>
             </div>
-            <div className="text-center p-2 bg-white/60 rounded-lg">
-              <div className="font-bold text-amber-700">&lt;6.0</div>
-              <div className="text-xs text-amber-600">Room for Improvement</div>
+            <div className="text-center p-3 bg-white/80 rounded-lg border-2 border-yellow-200">
+              <div className="w-4 h-4 rounded border-2 border-yellow-400 bg-white mx-auto mb-1"></div>
+              <div className="font-bold text-yellow-700">5.0-6.5</div>
+              <div className="text-xs text-yellow-600">Average</div>
+            </div>
+            <div className="text-center p-3 bg-white/80 rounded-lg border-2 border-red-200">
+              <div className="w-4 h-4 rounded border-2 border-red-500 bg-white mx-auto mb-1"></div>
+              <div className="font-bold text-red-700">&lt;5.0</div>
+              <div className="text-xs text-red-600">Poor</div>
             </div>
           </div>
 

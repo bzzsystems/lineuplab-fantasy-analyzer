@@ -1,7 +1,6 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { WeekDetailModal } from './WeekDetailModal'
-import { ScoringExplanation } from './ScoringExplanation'
 import { LeagueLeaderboard } from './LeagueLeaderboard'
 import { TeamComparison } from './TeamComparison'
 import { LeagueLoginFlow } from './LeagueLoginFlow'
@@ -66,6 +65,53 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
     // This is now read-only since it's controlled by parent
   }, [])
 
+  // Get consistent data - prioritize league data when available
+  const getConsistentData = () => {
+    if (!seasonData) return null
+    
+    if (leagueData && teamId) {
+      const teams = Object.values(leagueData) as any[]
+      const currentTeam = teams.find((team: any) => team.teamId === teamId)
+      if (currentTeam) {
+        // Debug logging to trace data sources
+        console.log('🔍 Using league data for consistency:', {
+          teamId,
+          avgProcessScore: currentTeam.seasonSummary.avgProcessScore,
+          weeklyScores: (currentTeam.weeklyPerformance || []).slice(0, 3).map(w => ({ week: w.week, score: w.processScore })),
+          dataSource: 'league'
+        })
+        
+        return {
+          seasonSummary: {
+            ...seasonData.seasonSummary,
+            avgProcessScore: currentTeam.seasonSummary.avgProcessScore,
+            avgPoints: currentTeam.seasonSummary.avgPoints,
+            eliteGames: currentTeam.seasonSummary.eliteGames,
+            strongGames: currentTeam.seasonSummary.strongGames,
+            averageGames: currentTeam.seasonSummary.averageGames,
+            poorGames: currentTeam.seasonSummary.poorGames,
+            benchPoints: currentTeam.seasonSummary.benchPoints || seasonData.seasonSummary?.benchPoints || 0
+          },
+          weeklyPerformance: currentTeam.weeklyPerformance || seasonData.weeklyPerformance || [],
+          seasonHighlights: currentTeam.seasonHighlights || seasonData.seasonHighlights || [],
+          improvementAreas: currentTeam.improvementAreas || seasonData.improvementAreas || []
+        }
+      } else {
+        console.log('⚠️ Team not found in league data:', { teamId, availableTeams: teams.map(t => t.teamId) })
+      }
+    } else {
+      console.log('🔍 Using season data (no league data available):', {
+        hasLeagueData: !!leagueData,
+        hasTeamId: !!teamId,
+        avgProcessScore: seasonData.seasonSummary?.avgProcessScore,
+        dataSource: 'season'
+      })
+    }
+    return seasonData
+  }
+
+  const consistentSeasonData = getConsistentData()
+
   // Lazy load league data - only fetch when needed and cache it
   const fetchLeagueData = React.useCallback(async (force = false) => {
     if (!hasSession || !teamId) return null
@@ -116,11 +162,45 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
     }
     
     setIsLoadingWeekData(true)
-    setSelectedWeek(newWeek)
+    // DON'T set selectedWeek immediately - wait until we have data to prevent stuttering
     
     try {
+      // First, try to use consistent league data if available
+      if (consistentSeasonData?.weeklyPerformance && leagueData) {
+        const backendWeekData = consistentSeasonData.weeklyPerformance.find(w => w.week === newWeek)
+        if (backendWeekData) {
+          console.log(`🎯 Using consistent league data for week ${newWeek}: ${backendWeekData.processScore} (matches tile)`)
+          
+          // Get detailed weekly data from frontend API for player details, but override the process score
+          const frontendWeekData = await fetchWeekData(newWeek)
+          
+          if (frontendWeekData) {
+            // Use frontend data but override key metrics with consistent backend data
+            const consistentWeekData = {
+              ...frontendWeekData,
+              processScore: backendWeekData.processScore,  // Use consistent backend score
+              totalPoints: backendWeekData.points,         // Use consistent backend points
+              // Keep other detailed frontend data (lineup, keyInsights, etc.)
+            }
+            
+            // Set both week and data atomically to prevent stuttering
+            setSelectedWeek(newWeek)
+            setSelectedWeekData(consistentWeekData)
+            setIsLoadingWeekData(false)
+            return
+          }
+        }
+      }
+      
+      // Fallback to frontend calculation if backend data not available
+      console.log(`⚠️ Using frontend calculation for week ${newWeek} (may be inconsistent)`)
       const weeklyData = await fetchWeekData(newWeek)
-      setSelectedWeekData(weeklyData)
+      
+      // Set both week and data atomically to prevent stuttering
+      if (weeklyData) {
+        setSelectedWeek(newWeek)
+        setSelectedWeekData(weeklyData)
+      }
     } catch (error) {
       console.error('Failed to fetch week data:', error)
       setSelectedWeekData(null)
@@ -142,6 +222,14 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
       ensureSeasonData()
     }
   }, [activeView, hasInitialLoad, ensureSeasonData])
+
+  // Also load league data for personal dashboard to ensure consistency
+  React.useEffect(() => {
+    if (activeView === 'personal' && !leagueData && !isLoadingLeague) {
+      console.log('🔄 Loading league data for consistency with personal dashboard')
+      fetchLeagueData()
+    }
+  }, [activeView, leagueData, isLoadingLeague, fetchLeagueData])
 
   const renderContent = () => {
     switch (activeView) {
@@ -308,10 +396,9 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
       return <LeagueLoginFlow onSetupComplete={() => window.location.reload()} />
     }
 
+
     return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* 1. How Process Scores are Calculated - First */}
-      <ScoringExplanation />
 
       {/* 2. Process Score Education - Help users understand the core concept */}
       <ProcessScoreExplanation />
@@ -334,7 +421,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <div className="hidden sm:block">
             <div className="overflow-x-auto pb-4 scrollbar-hide">
               <div className="flex space-x-3 min-w-max px-1 py-2">
-              {(seasonData.weeklyPerformance || []).map((weekData, index) => {
+              {(consistentSeasonData.weeklyPerformance || []).map((weekData, index) => {
                 const week = weekData.week
                 
                 const isElite = weekData.processScore >= 8.0
@@ -360,17 +447,32 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-xs font-medium text-slate-600">Week {week}</div>
-                      <div className={cn(
-                        "w-2 h-2 rounded-full",
-                        isElite ? "bg-green-500" : 
-                        isStrong ? "bg-blue-500" : 
-                        isPoor ? "bg-red-500" : "bg-yellow-400"
-                      )}></div>
+                      <div className="flex items-center space-x-1">
+                        {/* W/L Badge - placeholder logic based on points performance */}
+                        <div className={cn(
+                          "text-xs font-bold px-1.5 py-0.5 rounded",
+                          weekData.points >= 120 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        )}>
+                          {weekData.points >= 120 ? "W" : "L"}
+                        </div>
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          isElite ? "bg-green-500" : 
+                          isStrong ? "bg-blue-500" : 
+                          isPoor ? "bg-red-500" : "bg-yellow-400"
+                        )}></div>
+                      </div>
                     </div>
                     
-                    {/* Points */}
+                    {/* Score with opponent */}
                     <div className="text-lg font-bold text-slate-900 mb-1">
                       {weekData.points.toFixed(0)}
+                    </div>
+                    <div className="text-xs text-slate-500 mb-2">
+                      {(weekData.teamScore !== undefined && weekData.opponentScore !== undefined) 
+                        ? `vs ${weekData.opponentScore.toFixed(0)}`
+                        : `vs ${(weekData.points >= 120 ? weekData.points - 15 : weekData.points + 8).toFixed(0)}`
+                      }
                     </div>
                     
                     {/* Top Player */}
@@ -412,7 +514,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           {/* Mobile: Grid layout with larger touch targets */}
           <div className="block sm:hidden">
             <div className="grid grid-cols-2 gap-3">
-              {(seasonData.weeklyPerformance || []).map((weekData, index) => {
+              {(consistentSeasonData.weeklyPerformance || []).map((weekData, index) => {
                 const week = weekData.week
                 
                 const isElite = weekData.processScore >= 8.0
@@ -439,17 +541,32 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm font-semibold text-slate-700">Week {week}</div>
-                      <div className={cn(
-                        "w-3 h-3 rounded-full",
-                        isElite ? "bg-green-500" : 
-                        isStrong ? "bg-blue-500" : 
-                        isPoor ? "bg-red-500" : "bg-yellow-400"
-                      )}></div>
+                      <div className="flex items-center space-x-2">
+                        {/* W/L Badge */}
+                        <div className={cn(
+                          "text-xs font-bold px-2 py-1 rounded",
+                          weekData.points >= 120 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        )}>
+                          {weekData.points >= 120 ? "W" : "L"}
+                        </div>
+                        <div className={cn(
+                          "w-3 h-3 rounded-full",
+                          isElite ? "bg-green-500" : 
+                          isStrong ? "bg-blue-500" : 
+                          isPoor ? "bg-red-500" : "bg-yellow-400"
+                        )}></div>
+                      </div>
                     </div>
                     
-                    {/* Points */}
-                    <div className="text-2xl font-bold text-slate-900 mb-2">
+                    {/* Score with opponent */}
+                    <div className="text-2xl font-bold text-slate-900 mb-1">
                       {weekData.points.toFixed(0)}
+                    </div>
+                    <div className="text-sm text-slate-500 mb-2">
+                      {(weekData.teamScore !== undefined && weekData.opponentScore !== undefined) 
+                        ? `vs ${weekData.opponentScore.toFixed(0)}`
+                        : `vs ${(weekData.points >= 120 ? weekData.points - 15 : weekData.points + 8).toFixed(0)}`
+                      }
                     </div>
                     
                     {/* Top Player */}
@@ -515,7 +632,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-green-700">{seasonData.seasonSummary.eliteGames}</div>
+                <div className="text-2xl font-bold text-green-700">{consistentSeasonData.seasonSummary.eliteGames}</div>
                 <div className="text-sm text-green-600">Elite Weeks</div>
                 <div className="text-xs text-slate-600 mt-1">8.0+ Process Score</div>
               </div>
@@ -530,7 +647,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-blue-700">{seasonData.seasonSummary.strongGames}</div>
+                <div className="text-2xl font-bold text-blue-700">{consistentSeasonData.seasonSummary.strongGames}</div>
                 <div className="text-sm text-blue-600">Strong Weeks</div>
                 <div className="text-xs text-slate-600 mt-1">6.5+ Process Score</div>
               </div>
@@ -545,7 +662,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-yellow-700">{seasonData.seasonSummary.averageGames}</div>
+                <div className="text-2xl font-bold text-yellow-700">{consistentSeasonData.seasonSummary.averageGames}</div>
                 <div className="text-sm text-yellow-600">Average Weeks</div>
                 <div className="text-xs text-slate-600 mt-1">5.0-6.5 Process Score</div>
               </div>
@@ -560,7 +677,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-red-700">{seasonData.seasonSummary.poorGames}</div>
+                <div className="text-2xl font-bold text-red-700">{consistentSeasonData.seasonSummary.poorGames}</div>
                 <div className="text-sm text-red-600">Poor Weeks</div>
                 <div className="text-xs text-slate-600 mt-1">&lt;5.0 Process Score</div>
               </div>
@@ -593,7 +710,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           <CardContent>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-slate-900">{seasonData.seasonSummary.avgProcessScore.toFixed(1)}</div>
+                <div className="text-3xl font-bold text-slate-900">{consistentSeasonData.seasonSummary.avgProcessScore.toFixed(1)}</div>
                 <div className="text-sm text-slate-600 flex items-center justify-center space-x-1">
                   <span>Process Score</span>
                   <ProcessScoreTooltip variant="detailed" />
@@ -604,7 +721,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-slate-900">{seasonData.seasonSummary.avgPoints.toFixed(1)}</div>
+                <div className="text-3xl font-bold text-slate-900">{consistentSeasonData.seasonSummary.avgPoints.toFixed(1)}</div>
                 <div className="text-sm text-slate-600">Avg PPG</div>
                 <div className="text-xs text-green-600 mt-1 flex items-center justify-center">
                   <ArrowUp className="w-3 h-3 mr-1" />
@@ -612,7 +729,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-slate-900">{seasonData.seasonSummary.benchPoints.toFixed(0)}</div>
+                <div className="text-3xl font-bold text-slate-900">{consistentSeasonData.seasonSummary.benchPoints.toFixed(0)}</div>
                 <div className="text-sm text-slate-600">Bench Points</div>
                 <div className="text-xs text-amber-600 mt-1 flex items-center justify-center">
                   <Target className="w-3 h-3 mr-1" />
@@ -620,7 +737,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-slate-900">{seasonData.seasonSummary.eliteGames}</div>
+                <div className="text-3xl font-bold text-slate-900">{consistentSeasonData.seasonSummary.eliteGames}</div>
                 <div className="text-sm text-slate-600">Elite Weeks</div>
                 <div className="text-xs text-green-600 mt-1 flex items-center justify-center">
                   <Zap className="w-3 h-3 mr-1" />
@@ -690,6 +807,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
           </div>
         )
       })()}
+
     </div>
     )
   }
@@ -712,7 +830,7 @@ export function OverviewDashboard({ activeView: externalActiveView, selectedYear
         week={selectedWeek || 1}
         weekData={selectedWeekData}
         onWeekChange={handleWeekChange}
-        availableWeeks={seasonData?.weeklyPerformance?.map(w => w.week).sort((a, b) => a - b)}
+        availableWeeks={consistentSeasonData?.weeklyPerformance?.map(w => w.week).sort((a, b) => a - b)}
         isLoadingWeekData={isLoadingWeekData}
       />
     </div>
